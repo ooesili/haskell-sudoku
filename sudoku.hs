@@ -1,5 +1,7 @@
 import Data.List
 import Control.Monad
+import System.Environment
+import System.IO
 
 data Number = Solved Int | CanBe [Int] deriving (Eq)
 type Puzzle = [[Number]]
@@ -12,9 +14,16 @@ instance Show Number where
 
 main :: IO ()
 main = do
+    args <- getArgs
+    case args of []     -> doPuzzle stdin
+                 [file] -> withFile file ReadMode doPuzzle
+                 _      -> error "too many arguments"
+
+doPuzzle :: Handle -> IO ()
+doPuzzle handle = do
     puzzle <- fmap concat . replicateM 3 $ do
-        _ <- getLine
-        replicateM 3 $ fmap stripPipes getLine
+        _ <- hGetLine handle
+        replicateM 3 (fmap stripPipes $ hGetLine handle)
     printPuzzle . solve . puzzleParse $ puzzle
     where stripPipes = filter (/= '|')
 
