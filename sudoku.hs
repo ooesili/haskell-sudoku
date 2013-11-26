@@ -47,9 +47,9 @@ solve p = if isSolved tried
              else if p /= tried
                   then solve tried
                   else tried --error "i'm stuck"
-    where tryRows   = map trySolve
-          tryCols   = fromCols . map trySolve . toCols
-          tryChunks = unchunk  . map trySolve . chunk
+    where tryRows   = map (canBeOne . trySolve)
+          tryCols   = fromCols . map (canBeOne . trySolve) . toCols
+          tryChunks = unchunk  . map (canBeOne . trySolve) . chunk
           tried     = tryChunks . tryCols . tryRows $ p
 
 -- sees if puzzle is done
@@ -75,11 +75,35 @@ getSolved = concat . map go
     where go (Solved x) = [x]
           go (CanBe  _) = []
 
+getUnsolved :: [Number] -> [Int]
+getUnsolved = concat . map go
+    where go (Solved _) = []
+          go (CanBe xs) = xs
+
 -- removes impossible solutions from each CanBe
 trySolve :: [Number] -> [Number]
 trySolve ns = map (smap removeSolved) ns
     where solved         = getSolved ns
           removeSolved n = n \\ solved
+
+-- solves CanBe's with a unique possilbity
+canBeOne :: [Number] -> [Number]
+canBeOne ns = map solveUnique ns
+    where unsolved = getUnsolved ns
+          uniques = map fst . filter (\(_,n) -> n == 1) $ count unsolved
+          solveUnique      (Solved x) = (Solved x)
+          solveUnique orig@(CanBe xs) =
+              let unique = (xs `intersect` uniques)
+              in if null unique
+                 then orig
+                 else Solved (head unique)
+
+-- count the number of elements in list
+count :: (Eq a) => [a] -> [(a, Int)]
+count ns = foldl go (zip (nub ns) (repeat 0)) ns
+    where go []         _   = error "your code done goofed, bro"
+          go (a@(e,n):as) x = if x == e then (e, n+1):as
+                                        else a : go as x
 
 -- splits a list in two three groups of three
 splitThrees :: [a] -> [[a]]
