@@ -55,11 +55,20 @@ solve p = if isSolved tried
              then tried
              else if p /= tried
                   then solve tried
-                  else tried --error "i'm stuck"
-    where tryRows   = map (canBeOne . trySolve)
-          tryCols   = fromCols . map (canBeOne . trySolve) . toCols
-          tryChunks = unchunk  . map (canBeOne . trySolve) . chunk
-          tried     = tryChunks . tryCols . tryRows $ p
+                  else if uniqued == tried
+                       then tried
+                       else solve uniqued
+    where try     = puzzleMap trySolve id
+          tried   = try p
+          uniqued = puzzleMap tryUnique try tried
+
+-- maps f over the rows, columns and chunks (in that order)
+-- applies g to between trying rows, columns, and chunks
+puzzleMap :: ([Number] -> [Number]) -> (Puzzle -> Puzzle) -> Puzzle -> Puzzle
+puzzleMap f g = g . tryChunks . g . tryCols . g . tryRows
+    where tryRows   = map f
+          tryCols   = fromCols . map f . toCols
+          tryChunks = unchunk  . map f . chunk
 
 -- sees if puzzle is done
 isSolved :: Puzzle -> Bool
@@ -96,8 +105,8 @@ trySolve ns = map (smap removeSolved) ns
           removeSolved n = n \\ solved
 
 -- solves CanBe's with a unique possilbity
-canBeOne :: [Number] -> [Number]
-canBeOne ns = map solveUnique ns
+tryUnique :: [Number] -> [Number]
+tryUnique ns = map solveUnique ns
     where unsolved = getUnsolved ns
           uniques = map fst . filter (\(_,n) -> n == 1) $ count unsolved
           solveUnique      (Solved x) = (Solved x)
