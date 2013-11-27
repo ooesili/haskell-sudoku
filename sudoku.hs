@@ -2,6 +2,7 @@ import Data.List
 import Control.Monad
 import System.Environment
 import System.IO
+import Data.Maybe
 
 data Number = Solved Int | CanBe [Int] deriving (Eq)
 type Puzzle = [[Number]]
@@ -67,9 +68,29 @@ solve p = do
     where try    = puzzleMap trySolve             return
           unique = puzzleMap (return . tryUnique) try
 
--- temporary place holder for guessing function
+-- guesses unsolved numbers based on their possibilities
 guess :: Puzzle -> Maybe Puzzle
-guess = const Nothing
+guess p = listToMaybe . catMaybes . concat $ goRows ([],p)
+    where goRows (_,  []   ) = [] -- something
+          goRows (rp, r:rn)  = goNums (rp, rn, [], r) : goRows (r:rp, rn)
+          goNums (_,  _,  _,  []  ) = []
+          goNums (rp, rn, np, n:nn) =
+              let replace []     = continue
+                  replace (x:xs) =
+                      let row = np ++ (Solved x):nn
+                          p' = rp ++ row:rn
+                      in (solve p' >>= checkPuzzle) : replace xs
+                  continue = goNums (rp, rn, n:np, nn)
+              in case n of (Solved _) -> continue
+                           (CanBe xs) -> replace xs
+
+-- checks a full puzzle for errors
+checkPuzzle :: Puzzle -> Maybe Puzzle
+checkPuzzle = puzzleMap allGood Just
+    where allGood ns =
+              let solved = getSolved ns
+              in if length (nub solved) == 9 then Just ns
+                                             else Nothing
 
 -- maps f over the rows, columns and chunks (in that order)
 -- applies g to between trying rows, columns, and chunks
