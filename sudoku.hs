@@ -22,9 +22,11 @@ main = do
 doPuzzle :: Handle -> IO ()
 doPuzzle handle = do
     puzzle <- fmap concat . replicateM 3 $ do
-        _ <- hGetLine handle
+        void $ hGetLine handle
         replicateM 3 (fmap stripPipes $ hGetLine handle)
-    printPuzzle . solve . puzzleParse $ puzzle
+    let maybeSolved = solve $ puzzleParse puzzle
+    case maybeSolved of (Just p) -> printPuzzle p
+                        Nothing  -> error "no solutions"
     where stripPipes = filter (/= '|')
 
 -- prints a puzzle
@@ -50,25 +52,32 @@ puzzleParse = map (map toNumber)
           toNumber x   = Solved (read [x])
 
 -- solves a puzzle
-solve :: Puzzle -> Puzzle
-solve p = if isSolved tried
-             then tried
-             else if p /= tried
-                  then solve tried
-                  else if uniqued == tried
-                       then tried
-                       else solve uniqued
-    where try     = puzzleMap trySolve id
-          tried   = try p
-          uniqued = puzzleMap tryUnique try tried
+solve :: Puzzle -> Maybe Puzzle
+solve p = do
+    tried <- try p
+    if isSolved tried  -- sees if its solved
+       then Just tried -- success!
+       else if p /= tried       -- did trySolve get anywhere?
+               then solve tried -- if it did, keep trying
+               else (do         -- otherwise try the unique strategy
+                   uniqued <- unique tried
+                   if uniqued /= tried    -- sees if tryUnique got anywhere
+                      then solve uniqued  -- if it did, keept trying
+                      else guess uniqued) -- else, time to guess
+    where try    = puzzleMap trySolve             return
+          unique = puzzleMap (return . tryUnique) try
+
+-- temporary place holder for guessing function
+guess :: Puzzle -> Maybe Puzzle
+guess = const Nothing
 
 -- maps f over the rows, columns and chunks (in that order)
 -- applies g to between trying rows, columns, and chunks
-puzzleMap :: ([Number] -> [Number]) -> (Puzzle -> Puzzle) -> Puzzle -> Puzzle
-puzzleMap f g = g . tryChunks . g . tryCols . g . tryRows
-    where tryRows   = map f
-          tryCols   = fromCols . map f . toCols
-          tryChunks = unchunk  . map f . chunk
+puzzleMap :: ([Number] -> Maybe [Number]) ->
+             (Puzzle -> Maybe Puzzle) -> Puzzle -> Maybe Puzzle
+puzzleMap f g p = (f `onRows` p) >>= g
+              >>= (f `onCols`)   >>= g
+              >>= (f `onChunks`) >>= g
 
 -- sees if puzzle is done
 isSolved :: Puzzle -> Bool
@@ -78,13 +87,12 @@ isSolved = and . map (all go)
 
 -- applys a function to a Number and marks it solved if
 -- that function returns only one number
-smap :: ([Int] -> [Int]) -> Number -> Number
-smap _ (Solved x) = Solved x
+smap :: ([Int] -> [Int]) -> Number -> Maybe Number
+smap _ (Solved x) = Just (Solved x)
 smap f (CanBe xs)
-    | length xs' == 1 = Solved (head xs')
-    | length xs' >  1 = CanBe xs'
-    | otherwise       = error $ "no solutions: "
-                              ++ show xs ++ " -> " ++ show xs'
+    | length xs' == 1 = Just (Solved (head xs'))
+    | length xs' >  1 = Just (CanBe xs')
+    | otherwise       = Nothing
     where xs' = f xs
 
 -- returns all of the solved numbers
@@ -99,8 +107,8 @@ getUnsolved = concat . map go
           go (CanBe xs) = xs
 
 -- removes impossible solutions from each CanBe
-trySolve :: [Number] -> [Number]
-trySolve ns = map (smap removeSolved) ns
+trySolve :: [Number] -> Maybe [Number]
+trySolve ns = mapM (smap removeSolved) ns
     where solved         = getSolved ns
           removeSolved n = n \\ solved
 
@@ -130,7 +138,19 @@ splitThrees xs = [one, two, three]
     where (one, twoAndThree) = splitAt 3 xs
           (two, three)       = splitAt 3 twoAndThree
 
--------- conversions for columns and chunks --------
+-------- conversions and applications for columns and chunks --------
+-- try a function over the chunks
+onCols :: ([Number] -> Maybe [Number]) -> Puzzle -> Maybe Puzzle
+onCols f p = mapM f (toCols p) >>= (return . fromCols)
+
+-- try a function over the chunks
+onChunks :: ([Number] -> Maybe [Number]) -> Puzzle -> Maybe Puzzle
+onChunks f p = mapM f (chunk p) >>= (return . unchunk)
+
+-- try a function over the rows
+onRows :: ([Number] -> Maybe [Number]) -> Puzzle -> Maybe Puzzle
+onRows = mapM
+
 -- columnize and uncolumnize functions
 -- yes they are the same, but the type signatures will help detect errors
 toCols :: Puzzle -> [Col]
