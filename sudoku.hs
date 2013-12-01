@@ -77,8 +77,8 @@ guess p = listToMaybe . catMaybes . concat $ goRows ([],p)
           goNums (rp, rn, np, n:nn) =
               let replace []     = continue
                   replace (x:xs) =
-                      let row = np ++ (Solved x):nn
-                          p' = rp ++ row:rn
+                      let row = reverse np ++ (Solved x):nn
+                          p' = reverse rp ++ row:rn
                       in (solve p' >>= checkPuzzle) : replace xs
                   continue = goNums (rp, rn, n:np, nn)
               in case n of (Solved _) -> continue
