@@ -4,4 +4,4 @@ sudoku: sudoku.hs
 	ghc -Wall $^ -o $@
 
 clean:
-	rm sudoku{.hi,.o,}
+	rm -f sudoku{.hi,.o,}
